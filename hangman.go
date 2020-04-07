@@ -23,7 +23,7 @@ func main() {
 	for {
 		//evaluate a loss! If user guesses a wrong letter or the wrong word, they lose a chance.
 		if chances == 0 {
-			fmt.Println("Out of changes")
+			fmt.Println("Out of chances")
 			return
 		}
 		//evaluate a win!
@@ -33,25 +33,46 @@ func main() {
 		}
 		//Console display
 
-		fmt.Println(placeholder)                // render the placeholder
-		fmt.Printf("Chances left: %d", chances) // render the chances left
-		fmt.Println("\n")
+		fmt.Printf("placehoder: %v \n", placeholder) // render the placeholder
+		fmt.Printf("Chances left: %d", chances)      // render the chances left
+		fmt.Println()
 		for k := range entries {
-			fmt.Println(k)
+			fmt.Printf("%s ", k)
 		}
+		fmt.Println()
 		fmt.Printf("\n Guess a letter or the word: ")
 
 		// take the input
 		var str string
 		fmt.Scanln(&str)
-		if strings.Contains(word, str) {
-			for i, v := range word {
-				if strings.ContainsRune(str, v) {
-					placeholder[i] = str
-				}
+		if str == word {
+			fmt.Println("WON")
+			return
+		}
+
+		if len(str) == 0 {
+			fmt.Println("please enter a character")
+			continue
+		}
+
+		if len(str) > 1 {
+			entries[str] = true
+			chances--
+			continue
+		}
+
+		if !strings.Contains(word, str) {
+			_, ok := entries[str]
+			if !ok {
+				chances--
 			}
-		} else {
-			chances = chances - 1
+			entries[str] = true
+			continue
+		}
+		for i, v := range word {
+			if strings.ContainsRune(str, v) {
+				placeholder[i] = str
+			}
 		}
 		entries[str] = true
 		// compare and update entries, placeholder and chances.
