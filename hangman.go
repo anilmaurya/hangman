@@ -1,13 +1,42 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
 	"strings"
 )
 
+type Hangman struct {
+}
+
+func getWord() string {
+	resp, err := http.Get("https://random-word-api.herokuapp.com/word?number=5")
+	if err != nil {
+		fmt.Println("server down")
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Println("server down")
+	}
+
+	words := []string{}
+
+	err = json.Unmarshal(body, &words)
+	if err != nil {
+		fmt.Println("error while parsing")
+	}
+
+	return words[0]
+}
+
 func main() {
 	word := "elephant"
+
 	// const to define max const
+	word = getWord()
 	const maxChances = 8
 
 	// lookup for entries made by the user.
@@ -24,6 +53,7 @@ func main() {
 		//evaluate a loss! If user guesses a wrong letter or the wrong word, they lose a chance.
 		if chances == 0 {
 			fmt.Println("Out of chances")
+			fmt.Println("Correct word is", word)
 			return
 		}
 		//evaluate a win!
