@@ -10,7 +10,22 @@ import (
 	"time"
 )
 
-func getWord() string {
+type Hangman struct {
+	Entries     map[string]bool
+	Placeholder []string
+	Chances     int
+	maxChances  int
+	Word        string
+	Duration    time.Duration
+}
+
+var dev = flag.Bool("dev", false, "dev mode")
+
+func (h *Hangman) setWord() {
+	if *dev {
+		h.Word = "elephant"
+		return
+	}
 	resp, err := http.Get("https://random-word-api.herokuapp.com/word?number=5")
 	if err != nil {
 		fmt.Println("server down")
@@ -28,105 +43,114 @@ func getWord() string {
 		fmt.Println("error while parsing")
 	}
 
-	return words[0]
+	h.Word = words[0]
 }
 
-var dev = flag.Bool("dev", false, "dev mode")
-
-func main() {
-	flag.Parse()
-	word := "elephant"
-
-	// const to define max const
-	if !*dev {
-		word = getWord()
-	}
-	const maxChances = 8
-
-	// lookup for entries made by the user.
-	entries := make(map[string]bool)
-	totalTime := 20 * time.Second
-
-	t := time.NewTimer(totalTime)
-
+func (h *Hangman) setPlaceholder() {
 	// list of "_" corrosponding to the number of letters in the word. [ _ _ _ _ _ ]
-	placeholder := make([]string, len(word), len(word))
-	for i := range placeholder {
-		placeholder[i] = "_"
+	h.Placeholder = make([]string, len(h.Word), len(h.Word))
+	for i := range h.Placeholder {
+		h.Placeholder[i] = "_"
 	}
+}
 
-	chances := maxChances
-	result := make(chan bool)
+func (h Hangman) display(timeRemaining float64) {
+	fmt.Println()
+	fmt.Println()
+	fmt.Printf("placehoder: %v \n", h.Placeholder) // render the placeholder
+	fmt.Printf("Chances left: %d", h.Chances)      // render the chances left
+	fmt.Println()
+	fmt.Printf("Entries: ")
+	for k := range h.Entries {
+		fmt.Printf("%s ", k)
+	}
+	fmt.Println()
+	fmt.Printf("\033[2K\r Time Remaining %v sec", timeRemaining)
+	fmt.Printf("\n Guess a letter or the word: ")
+
+}
+
+func (h *Hangman) play(result chan bool, totalTime float64) {
+	timeRemaining := totalTime
 	start := 0.0
 	go func() {
 		for range time.Tick(1 * time.Second) {
 			start++
+			timeRemaining = totalTime - start
 		}
 	}()
-
-	go func() {
-		for {
-			//evaluate a loss! If user guesses a wrong letter or the wrong word, they lose a chance.
-			if chances == 0 {
-				fmt.Println("Out of chances")
-				fmt.Println("Correct word is", word)
-				result <- false
-				return
-			}
-			//evaluate a win!
-			if strings.Join(placeholder, "") == word {
-				result <- true
-				return
-			}
-			//Console display
-
-			fmt.Printf("placehoder: %v \n", placeholder) // render the placeholder
-			fmt.Printf("Chances left: %d", chances)      // render the chances left
-			fmt.Println()
-			fmt.Printf("Entries: ")
-			for k := range entries {
-				fmt.Printf("%s ", k)
-			}
-			fmt.Println()
-			fmt.Printf("\033[2K\r Time Remaining %v sec", totalTime.Seconds()-start)
-			fmt.Printf("\n Guess a letter or the word: ")
-
-			// take the input
-			var str string
-			fmt.Scanln(&str)
-			if str == word {
-				result <- true
-				return
-			}
-
-			if len(str) == 0 {
-				fmt.Println("please enter a character")
-				continue
-			}
-
-			if len(str) > 1 {
-				entries[str] = true
-				chances--
-				continue
-			}
-
-			if !strings.Contains(word, str) {
-				_, ok := entries[str]
-				if !ok {
-					chances--
-				}
-				entries[str] = true
-				continue
-			}
-			for i, v := range word {
-				if strings.ContainsRune(str, v) {
-					placeholder[i] = str
-				}
-			}
-			entries[str] = true
-			// compare and update entries, placeholder and chances.
+	for {
+		//evaluate a loss! If user guesses a wrong letter or the wrong word, they lose a chance.
+		if h.Chances == 0 {
+			fmt.Println("Out of chances")
+			fmt.Println("Correct word is", h.Word)
+			result <- false
+			return
 		}
-	}()
+		//evaluate a win!
+		if strings.Join(h.Placeholder, "") == h.Word {
+			result <- true
+			return
+		}
+		//Console display
+
+		h.display(timeRemaining)
+		// take the input
+		var str string
+		fmt.Scanln(&str)
+		if str == h.Word {
+			result <- true
+			return
+		}
+
+		if len(str) == 0 {
+			fmt.Println("please enter a character")
+			continue
+		}
+
+		if len(str) > 1 {
+			h.Entries[str] = true
+			h.Chances--
+			continue
+		}
+
+		if !strings.Contains(h.Word, str) {
+			_, ok := h.Entries[str]
+			if !ok {
+				h.Chances--
+			}
+			h.Entries[str] = true
+			continue
+		}
+		for i, v := range h.Word {
+			if strings.ContainsRune(str, v) {
+				h.Placeholder[i] = str
+			}
+		}
+		h.Entries[str] = true
+		// compare and update entries, placeholder and chances.
+	}
+}
+
+func main() {
+	flag.Parse()
+
+	h := Hangman{
+		Entries:    make(map[string]bool),
+		Chances:    8,
+		maxChances: 8,
+		Duration:   20,
+	}
+	h.setWord()
+	h.setPlaceholder()
+
+	totalTime := h.Duration * time.Second
+
+	t := time.NewTimer(totalTime)
+
+	result := make(chan bool)
+
+	go h.play(result, totalTime.Seconds())
 
 	select {
 	case res := <-result:
@@ -138,6 +162,6 @@ func main() {
 
 	case <-t.C:
 		fmt.Println("Timeout")
-		fmt.Println("Correct word is", word)
+		fmt.Println("Correct word is", h.Word)
 	}
 }
